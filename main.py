@@ -2498,8 +2498,8 @@ class MainWindow(QMainWindow):
         self.settings_btn = QPushButton("⚙")
         self.settings_btn.setObjectName("iconBtn")
         self.settings_btn.setToolTip("设置")
-        self.settings_btn.setFixedSize(34, 34)
-        _apply_icon(self.settings_btn, "8.png", size=20)
+        self.settings_btn.setFixedSize(40, 40)
+        _apply_icon(self.settings_btn, "8.png", size=26)
         self.settings_btn.clicked.connect(self._show_settings)
         title_row.addWidget(self.settings_btn)
 
@@ -2561,6 +2561,12 @@ class MainWindow(QMainWindow):
         popo_act.setEnabled(False)
         menu.addAction(popo_act)
 
+        # ── 分隔线 + 说明文档 ──
+        menu.addSeparator()
+        doc_act = QAction("📖  使用说明文档", self)
+        doc_act.triggered.connect(self._open_user_guide)
+        menu.addAction(doc_act)
+
         # 在设置按钮正下方弹出
         pos = self.settings_btn.mapToGlobal(
             self.settings_btn.rect().bottomLeft()
@@ -2568,6 +2574,16 @@ class MainWindow(QMainWindow):
         menu.exec(pos)
 
     # ── 更新相关 ──────────────────────────────────────────────────
+    def _open_user_guide(self):
+        """打开使用说明文档（优先内置 HTML，否则打开 GitHub）"""
+        import webbrowser
+        # resource_path 会在打包后指向 _MEIPASS，开发时指向项目目录
+        local_doc = resource_path(os.path.join("docs", "user_guide.html"))
+        if os.path.exists(local_doc):
+            webbrowser.open("file:///" + local_doc.replace("\\", "/"))
+        else:
+            webbrowser.open("https://github.com/DJpygeigei/GifCreatorTool")
+
     def _silent_check_update(self):
         """启动时静默检查，有新版才弹窗"""
         self._updater = UpdateChecker()
@@ -2748,7 +2764,7 @@ class MainWindow(QMainWindow):
         self.record_tab.range_w.apply_theme_icons(theme)
         self.gif_tab.range_w.apply_theme_icons(theme)
         # 设置按钮图标保持不变（两主题相同）
-        _set_btn_icon(self.settings_btn, ICON_SETTINGS, size=20)
+        _set_btn_icon(self.settings_btn, ICON_SETTINGS, size=26)
 
 
 # ───────────────────────────── Entry Point ────────────────────────────

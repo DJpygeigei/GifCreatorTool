@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GIFTool 使用说明</title>
+<style>
+  :root {
+    --accent:  #0071E3;
+    --accent2: #34AADC;
+    --bg:      #F5F5F7;
+    --card:    #FFFFFF;
+    --text:    #1D1D1F;
+    --muted:   #6E6E73;
+    --border:  #D2D2D7;
+    --tip-bg:  #EFF6FF;
+    --warn-bg: #FFFBEB;
+    --code-bg: #F0F0F5;
+    --radius:  12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.7;
+  }
+  .hero {
+    background: linear-gradient(135deg, #0071E3 0%, #34AADC 100%);
+    color: #fff; padding: 56px 48px 48px; text-align: center;
+  }
+  .hero h1 { font-size: 40px; font-weight: 700; letter-spacing: -0.5px; }
+  .hero p  { margin-top: 12px; font-size: 17px; opacity: 0.9; }
+  .badge {
+    display: inline-block; background: rgba(255,255,255,0.2);
+    border-radius: 20px; padding: 4px 14px; font-size: 13px; margin-top: 16px;
+  }
+  .container { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  .toc {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 24px 28px; margin-bottom: 40px;
+  }
+  .toc h2 { font-size: 16px; color: var(--muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .toc ol  { padding-left: 20px; }
+  .toc li  { margin: 6px 0; }
+  .toc a   { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  section { margin-bottom: 56px; scroll-margin-top: 24px; }
+  section h2 {
+    font-size: 26px; font-weight: 700; border-bottom: 2px solid var(--accent);
+    padding-bottom: 8px; margin-bottom: 24px; display: flex; align-items: center; gap: 10px;
+  }
+  section h2 .num {
+    background: var(--accent); color: #fff; width: 32px; height: 32px;
+    border-radius: 50%; font-size: 14px; display: flex; align-items: center;
+    justify-content: center; flex-shrink: 0;
+  }
+  section h3 { font-size: 18px; font-weight: 600; margin: 28px 0 12px; color: var(--text); }
+  section h3::before {
+    content: ''; display: inline-block; width: 4px; height: 16px;
+    background: var(--accent2); border-radius: 2px; margin-right: 8px; vertical-align: middle;
+  }
+  p { margin-bottom: 12px; color: var(--text); }
+  .img-wrap {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    overflow: hidden; margin: 16px 0 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  }
+  .img-wrap img { width: 100%; display: block; }
+  .img-caption {
+    font-size: 13px; color: var(--muted); padding: 8px 14px 10px;
+    background: #FAFAFA; border-top: 1px solid var(--border);
+  }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px 24px; margin-bottom: 16px;
+  }
+  .steps { counter-reset: step; }
+  .step { display: flex; gap: 16px; margin-bottom: 20px; align-items: flex-start; }
+  .step-num {
+    counter-increment: step; width: 28px; height: 28px; border-radius: 50%;
+    background: var(--accent); color: #fff; font-size: 13px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px;
+  }
+  .step-body { flex: 1; }
+  .step-body strong { font-size: 15px; display: block; margin-bottom: 4px; }
+  .tip, .warn {
+    border-radius: 8px; padding: 14px 18px; margin: 16px 0;
+    font-size: 14px; display: flex; gap: 10px; align-items: flex-start;
+  }
+  .tip  { background: var(--tip-bg);  border-left: 3px solid var(--accent); }
+  .warn { background: var(--warn-bg); border-left: 3px solid #F59E0B; }
+  .tip .icon, .warn .icon { font-size: 18px; line-height: 1.4; }
+  table {
+    width: 100%; border-collapse: collapse; font-size: 14px; margin: 16px 0;
+    background: var(--card); border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border);
+  }
+  th {
+    background: #F0F4FF; padding: 10px 16px; text-align: left; font-weight: 600;
+    color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: 0.3px;
+  }
+  td { padding: 10px 16px; border-top: 1px solid var(--border); }
+  tr:hover td { background: #F8F8FC; }
+  kbd {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 4px; padding: 2px 7px; font-size: 12px; font-family: monospace;
+  }
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+  .compare .img-wrap { margin: 0; }
+  @media (max-width: 600px) { .compare { grid-template-columns: 1fr; } }
+  .features {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px; margin: 20px 0;
+  }
+  .feature-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px 20px;
+  }
+  .feature-card .icon { font-size: 28px; margin-bottom: 10px; }
+  .feature-card h4 { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+  .feature-card p  { font-size: 13px; color: var(--muted); margin: 0; }
+  footer {
+    text-align: center; padding: 32px; color: var(--muted); font-size: 13px;
+    border-top: 1px solid var(--border); margin-top: 60px;
+  }
+  footer a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>GIFTool 使用说明</h1>
+  <p>视频转 GIF &middot; 屏幕录制 GIF &middot; 智能压缩 &middot; 多主题界面</p>
+  <span class="badge">v1.0.2</span>
+</div>
+
+<div class="container">
+
+  <div class="toc">
+    <h2>目录</h2>
+    <ol>
+      <li><a href="#overview">功能概览</a></li>
+      <li><a href="#install">安装与启动</a></li>
+      <li><a href="#video2gif">视频转 GIF</a>
+        <ol style="margin-top:4px">
+          <li><a href="#import">导入视频</a></li>
+          <li><a href="#preview">预览视频</a></li>
+          <li><a href="#range">选取时间范围</a></li>
+          <li><a href="#params">GIF 参数设置</a></li>
+          <li><a href="#compress">压缩选项</a></li>
+          <li><a href="#convert">开始转换</a></li>
+        </ol>
+      </li>
+      <li><a href="#record">录制 GIF</a>
+        <ol style="margin-top:4px">
+          <li><a href="#select-region">框选录制区域</a></li>
+          <li><a href="#recording">开始与停止录制</a></li>
+          <li><a href="#record-to-gif">录制内容转 GIF</a></li>
+        </ol>
+      </li>
+      <li><a href="#settings">设置与主题</a></li>
+      <li><a href="#update">版本更新</a></li>
+      <li><a href="#faq">常见问题</a></li>
+    </ol>
+  </div>
+
+
+  <!-- 1. 功能概览 -->
+  <section id="overview">
+    <h2><span class="num">1</span>功能概览</h2>
+    <div class="features">
+      <div class="feature-card"><div class="icon">🎬</div><h4>视频转 GIF</h4><p>导入 MP4、MOV、AVI 等格式，精确裁剪时间段，输出高质量 GIF</p></div>
+      <div class="feature-card"><div class="icon">⏺</div><h4>屏幕录制 GIF</h4><p>框选屏幕任意区域，实时录制，直接生成 GIF 动图</p></div>
+      <div class="feature-card"><div class="icon">📦</div><h4>智能压缩</h4><p>多种压缩模式，支持指定目标文件大小，自动二分搜索最优参数</p></div>
+      <div class="feature-card"><div class="icon">🌓</div><h4>浅色 / 深色主题</h4><p>跟随个人偏好，一键切换界面主题</p></div>
+      <div class="feature-card"><div class="icon">📂</div><h4>中文路径支持</h4><p>完整支持含中文的文件名和文件夹路径</p></div>
+      <div class="feature-card"><div class="icon">🔄</div><h4>自动更新</h4><p>启动时静默检查更新，一键下载安装新版本</p></div>
+    </div>
+    <div class="compare">
+      <div class="img-wrap">
+        <img src="./1.jpg" alt="浅色主题整体界面">
+        <div class="img-caption">浅色主题 — 视频转 GIF 标签页</div>
+      </div>
+      <div class="img-wrap">
+        <img src="./2.jpg" alt="深色主题整体界面">
+        <div class="img-caption">深色主题 — 视频转 GIF 标签页</div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- 2. 安装与启动 -->
+  <section id="install">
+    <h2><span class="num">2</span>安装与启动</h2>
+    <h3>Windows</h3>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-body"><strong>下载 GIFTool.exe</strong>从 <a href="https://github.com/DJpygeigei/GifCreatorTool/releases" style="color:var(--accent)">GitHub Releases</a> 下载最新版 GIFTool.exe</div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-body"><strong>放到任意文件夹</strong>无需安装，双击 GIFTool.exe 直接运行</div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-body"><strong>（可选）保持在固定目录</strong>自动更新功能会在同目录替换新版 EXE，建议不要放在只读位置</div></div>
+    </div>
+    <div class="tip"><span class="icon">💡</span><div>工具已内置 ffmpeg，<strong>无需额外安装任何依赖</strong>，开箱即用。</div></div>
+    <h3>macOS</h3>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-body"><strong>下载 GIFTool-macOS.zip</strong>从 GitHub Releases 下载 macOS 版压缩包</div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-body"><strong>解压并拖入「应用程序」文件夹</strong></div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-body"><strong>首次启动授权</strong>macOS 会拦截未签名应用，在「系统设置 → 隐私与安全性」中点击「仍要打开」</div></div>
+    </div>
+  </section>
+
+
+  <!-- 3. 视频转 GIF -->
+  <section id="video2gif">
+    <h2><span class="num">3</span>视频转 GIF</h2>
+
+    <h3 id="import">3.1 导入视频</h3>
+    <p>支持两种方式导入视频文件：</p>
+    <table>
+      <thead><tr><th>方式</th><th>操作</th></tr></thead>
+      <tbody>
+        <tr><td>拖拽</td><td>将视频文件直接拖拽到左侧虚线框内</td></tr>
+        <tr><td>浏览</td><td>点击「浏览」按钮，在文件对话框中选择视频</td></tr>
+      </tbody>
+    </table>
+    <p>支持格式：<kbd>MP4</kbd> <kbd>MOV</kbd> <kbd>AVI</kbd> <kbd>MKV</kbd> <kbd>WMV</kbd> <kbd>FLV</kbd> 等主流视频格式。</p>
+    <div class="tip"><span class="icon">📂</span><div>完整支持<strong>中文路径和中文文件名</strong>，例如「我的录像/演示视频.mp4」可以直接使用。</div></div>
+
+    <h3 id="preview">3.2 预览视频</h3>
+    <p>视频导入后，左侧区域显示视频预览播放器，可使用以下控件操作：</p>
+    <div class="img-wrap">
+      <img src="./3.jpg" alt="视频加载后的预览界面">
+      <div class="img-caption">视频导入后：左侧显示预览播放器，右侧显示参数面板</div>
+    </div>
+    <table>
+      <thead><tr><th>按钮</th><th>功能</th></tr></thead>
+      <tbody>
+        <tr><td>播放 / 暂停</td><td>控制视频播放状态</td></tr>
+        <tr><td>上一帧 / 下一帧</td><td>精确逐帧查看</td></tr>
+        <tr><td>回到开头 / 跳到结尾</td><td>快速定位到视频首尾</td></tr>
+        <tr><td>倒放</td><td>切换正向/倒向播放</td></tr>
+        <tr><td>音量滑块</td><td>调整预览音量</td></tr>
+      </tbody>
+    </table>
+
+    <h3 id="range">3.3 选取时间范围</h3>
+    <p>「选取时间范围」区域用于确定 GIF 的内容片段：</p>
+    <div class="img-wrap">
+      <img src="./4.jpg" alt="时间范围选取区域">
+      <div class="img-caption">橙色滑块拖动设置开始 / 结束时间，下方显示对应时间码</div>
+    </div>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-body"><strong>拖动左侧橙色滑块</strong> — 设置片段开始时间</div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-body"><strong>拖动右侧橙色滑块</strong> — 设置片段结束时间</div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-body"><strong>精确输入时间码</strong>：在下方输入框直接填写，格式为 <kbd>MM:SS.mmm</kbd></div></div>
+      <div class="step"><div class="step-num">4</div><div class="step-body"><strong>快速定位</strong>：点击「设为开始」或「设为结束」按钮，将播放器当前位置设为范围端点</div></div>
+    </div>
+    <p>选好范围后，可使用快速预览按钮确认效果：</p>
+    <div class="img-wrap">
+      <img src="./5.jpg" alt="预览片段按钮区域">
+      <div class="img-caption">「回到开始」跳到片段起点；「预览片段」仅播放选取区间</div>
+    </div>
+    <table>
+      <thead><tr><th>按钮</th><th>功能</th></tr></thead>
+      <tbody>
+        <tr><td>回到开始</td><td>将播放器跳至片段开始时间并暂停，方便查看起始帧</td></tr>
+        <tr><td>预览片段</td><td>从片段开始播放至结束时自动暂停，直观预览最终 GIF 效果</td></tr>
+      </tbody>
+    </table>
+
+    <h3 id="params">3.4 GIF 参数设置</h3>
+    <div class="img-wrap">
+      <img src="./6.jpg" alt="GIF 参数设置区域">
+      <div class="img-caption">设置帧率、分辨率和抖动算法</div>
+    </div>
+    <table>
+      <thead><tr><th>参数</th><th>说明</th><th>建议值</th></tr></thead>
+      <tbody>
+        <tr><td><strong>帧率 (FPS)</strong></td><td>每秒帧数。GIF 格式上限为 50fps，超过 50 自动截断</td><td>15 ~ 24 fps</td></tr>
+        <tr><td><strong>宽度</strong></td><td>输出 GIF 宽度（像素），高度填 -1 表示按比例自动计算</td><td>480 ~ 720px</td></tr>
+        <tr><td><strong>高度</strong></td><td>手动指定高度；-1 为自动等比缩放</td><td>-1（自动）</td></tr>
+        <tr><td><strong>抖动算法</strong></td><td>bayer：速度快、文件小；sierra2：更柔和；none：无抖动</td><td>bayer（推荐）</td></tr>
+        <tr><td><strong>锁定比例</strong></td><td>开启后调整宽度时高度自动等比同步</td><td>建议开启</td></tr>
+      </tbody>
+    </table>
+
+    <h3 id="compress">3.5 压缩选项</h3>
+    <div class="img-wrap">
+      <img src="./7.jpg" alt="压缩选项区域">
+      <div class="img-caption">六种压缩模式，满足不同场景需求</div>
+    </div>
+    <table>
+      <thead><tr><th>模式</th><th>说明</th><th>适合场景</th></tr></thead>
+      <tbody>
+        <tr><td><strong>不压缩</strong></td><td>直接按设定参数转换</td><td>对文件大小无要求时</td></tr>
+        <tr><td><strong>保持分辨率，降低帧率</strong></td><td>保持画面清晰度，通过降低帧数减小体积</td><td>画面精细度优先</td></tr>
+        <tr><td><strong>保持帧率，降低分辨率</strong></td><td>保持动画流畅度，通过缩小尺寸减小体积</td><td>动作流畅度优先</td></tr>
+        <tr><td><strong>指定目标大小</strong></td><td>自动二分搜索，同时调整帧率和分辨率</td><td>微信/邮件等有大小限制的平台</td></tr>
+        <tr><td><strong>指定大小（保持分辨率）</strong></td><td>仅调整帧率以达到目标大小</td><td>有尺寸要求且大小受限</td></tr>
+        <tr><td><strong>指定大小（保持帧率）</strong></td><td>仅调整分辨率以达到目标大小</td><td>有流畅度要求且大小受限</td></tr>
+      </tbody>
+    </table>
+    <div class="warn"><span class="icon">⚠️</span><div>选择「指定目标大小」模式时，工具会进行最多 9 次迭代搜索，耗时比普通模式略长，属正常现象。</div></div>
+
+    <h3 id="convert">3.6 开始转换</h3>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-body"><strong>设置输出路径</strong>：点击右侧「浏览」按钮，选择保存位置和文件名</div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-body"><strong>查看预估大小</strong>：参数面板下方实时显示预估文件大小</div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-body"><strong>点击「开始转换」</strong>：进度条实时显示转换状态</div></div>
+      <div class="step"><div class="step-num">4</div><div class="step-body"><strong>转换完成</strong>：状态栏显示实际文件大小，点击「打开文件夹」可直接定位到输出文件</div></div>
+    </div>
+    <div class="compare">
+      <div class="img-wrap">
+        <img src="./8.jpg" alt="转换进度条">
+        <div class="img-caption">转换中：进度条显示当前步骤</div>
+      </div>
+      <div class="img-wrap">
+        <img src="./9.jpg" alt="转换完成">
+        <div class="img-caption">转换完成：显示实际文件大小</div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- 4. 录制 GIF -->
+  <section id="record">
+    <h2><span class="num">4</span>录制 GIF</h2>
+    <p>切换到顶部「录制 GIF」标签页，可直接录制屏幕内容并转换成 GIF。</p>
+    <div class="img-wrap">
+      <img src="./10.jpg" alt="录制 GIF 标签页整体界面">
+      <div class="img-caption">录制 GIF 标签页，包含区域选择、录制控制、参数设置等</div>
+    </div>
+
+    <h3 id="select-region">4.1 框选录制区域</h3>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-body"><strong>点击「选择区域」按钮</strong>：界面最小化，屏幕出现半透明遮罩</div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-body"><strong>按住鼠标左键拖动</strong>：绘制矩形选区，蓝色边框实时显示选取范围</div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-body"><strong>松开鼠标</strong>：选区确认，界面恢复并显示区域坐标和尺寸</div></div>
+    </div>
+    <div class="img-wrap">
+      <img src="./11.jpg" alt="屏幕框选效果">
+      <div class="img-caption">框选时的半透明遮罩和蓝色选区边框</div>
+    </div>
+    <div class="tip"><span class="icon">💡</span><div>按 <kbd>Esc</kbd> 可取消框选操作，回到正常状态。</div></div>
+
+    <h3 id="recording">4.2 开始 / 停止录制</h3>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-body"><strong>点击「开始录制」</strong>：按钮变为「停止录制」，右侧计时器开始计时</div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-body"><strong>操作屏幕内容</strong>：工具在后台实时捕获选定区域的画面</div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-body"><strong>点击「停止录制」</strong>：录制停止，进入编码阶段，稍候片刻</div></div>
+      <div class="step"><div class="step-num">4</div><div class="step-body"><strong>录制完成</strong>：视频自动加载到预览播放器，可进行后续裁剪和参数调整</div></div>
+    </div>
+    <div class="img-wrap">
+      <img src="./12.jpg" alt="录制中状态">
+      <div class="img-caption">录制进行中：计时器显示已录制时长，停止按钮高亮</div>
+    </div>
+
+    <h3 id="record-to-gif">4.3 录制内容转 GIF</h3>
+    <p>录制完成后，界面与「视频转 GIF」完全一致，可进行：</p>
+    <ul style="padding-left:20px; margin:8px 0;">
+      <li style="margin:6px 0">使用时间范围滑块裁剪录制内容</li>
+      <li style="margin:6px 0">用「预览片段」按钮确认效果</li>
+      <li style="margin:6px 0">调整 GIF 帧率、分辨率、抖动算法</li>
+      <li style="margin:6px 0">选择压缩模式</li>
+      <li style="margin:6px 0">点击「开始转换」生成 GIF</li>
+    </ul>
+    <div class="tip"><span class="icon">🎯</span><div>录制帧率建议设置为 15~24 fps。GIF 格式上限 50fps，过高的录制帧率不会提升最终 GIF 质量，只会增加文件大小。</div></div>
+  </section>
+
+
+  <!-- 5. 设置与主题 -->
+  <section id="settings">
+    <h2><span class="num">5</span>设置与主题</h2>
+    <p>点击右上角的设置按钮，展开设置菜单：</p>
+    <div class="img-wrap">
+      <img src="./13.jpg" alt="设置菜单">
+      <div class="img-caption">设置菜单，包含主题切换、更新检查和联系开发者</div>
+    </div>
+    <table>
+      <thead><tr><th>菜单项</th><th>功能</th></tr></thead>
+      <tbody>
+        <tr><td><strong>界面主题</strong></td><td>子菜单中选择「浅色」或「深色」，立即生效</td></tr>
+        <tr><td><strong>检查更新</strong></td><td>手动触发检查 GitHub 最新版本，有新版本时弹出下载提示</td></tr>
+        <tr><td><strong>使用说明文档</strong></td><td>打开本文档</td></tr>
+        <tr><td><strong>联系开发者</strong></td><td>显示开发者联系方式：POPO wupengyu1@corp.netease.com</td></tr>
+      </tbody>
+    </table>
+    <div class="tip"><span class="icon">🔄</span><div>工具每天启动时会<strong>静默检查一次更新</strong>，不弹窗，只在检测到新版本时才提示，不影响正常使用。</div></div>
+  </section>
+
+
+  <!-- 6. 版本更新 -->
+  <section id="update">
+    <h2><span class="num">6</span>版本更新</h2>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-body"><strong>收到更新提示</strong>：启动时或手动检查时，若检测到新版本，弹窗显示版本号和更新内容</div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-body"><strong>点击「立即更新」</strong>：后台自动下载新版 EXE，进度条实时显示</div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-body"><strong>下载完成后自动重启</strong>：旧版本自动替换，程序重新启动后即为新版本</div></div>
+    </div>
+    <div class="warn"><span class="icon">⚠️</span><div>更新过程中请勿手动关闭程序或移动 EXE 文件位置，否则可能导致替换失败。若更新失败，可直接到 GitHub Releases 页面手动下载新版本。</div></div>
+  </section>
+
+
+  <!-- 7. 常见问题 -->
+  <section id="faq">
+    <h2><span class="num">7</span>常见问题</h2>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px; font-size:15px;">Q：转换出的 GIF 比视频慢很多，像慢放？</h3>
+      <p style="margin:0; color:var(--muted)">A：通常是帧率设置过低导致。尝试提高「帧率」参数（建议 15~24 fps）。如果源视频帧率是 60fps，GIF 最高只能输出 50fps，但视觉上不会有明显差异。</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px; font-size:15px;">Q：手机录制的视频转 GIF 后画面旋转了（竖屏变横屏）？</h3>
+      <p style="margin:0; color:var(--muted)">A：工具已自动检测视频旋转元数据并修正。如果仍有异常，请确认使用的是最新版本（v1.0.2+）。</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px; font-size:15px;">Q：提示「无法连接到 GitHub」或「rate limit exceeded」？</h3>
+      <p style="margin:0; color:var(--muted)">A：工具已内置每日缓存机制，每台电脑每天只会查询 GitHub API 一次。如处于公司内网导致无法访问，可忽略该提示，不影响工具正常使用。</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px; font-size:15px;">Q：录制 GIF 时预览窗口不显示内容？</h3>
+      <p style="margin:0; color:var(--muted)">A：录制完成后需要等待几秒钟的编码过程，编码完成后视频会自动加载到预览窗口。若长时间没有内容，可检查磁盘剩余空间是否充足。</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px; font-size:15px;">Q：文件路径含中文，导入或导出报错？</h3>
+      <p style="margin:0; color:var(--muted)">A：工具已通过 Windows 8.3 短路径和临时文件两层机制支持中文路径，请确认使用最新版本（v1.0.2+）。</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px; font-size:15px;">Q：指定目标大小模式转换很慢？</h3>
+      <p style="margin:0; color:var(--muted)">A：该模式最多进行 9 次迭代搜索最优参数，耗时是普通模式的数倍，属于正常现象。如对速度有要求，建议使用「保持分辨率」或「保持帧率」模式替代。</p>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <p>GIFTool v1.0.2 &nbsp;&middot;&nbsp; <a href="https://github.com/DJpygeigei/GifCreatorTool">GitHub</a> &nbsp;&middot;&nbsp; 联系开发者：POPO wupengyu1@corp.netease.com</p>
+  <p style="margin-top:6px; opacity:0.6">© 2026 wupengyu1. All rights reserved.</p>
+</footer>
+
+</body>
+</html>
