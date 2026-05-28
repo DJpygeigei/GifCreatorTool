@@ -1,0 +1,24 @@
+# ffmpeg binaries（体积大，Actions 自动下载）
+ffmpeg.exe
+ffprobe.exe
+ffmpeg
+ffprobe
+
+# PyInstaller
+dist/
+build/
+*.spec.bak
+__pycache__/
+*.pyc
+*.pyo
+
+# 构建日志
+build_log.txt
+
+# 更新脚本（运行时临时生成）
+_giftool_update.bat
+_giftool_update.sh
+
+# 系统文件
+.DS_Store
+Thumbs.db
