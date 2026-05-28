@@ -482,7 +482,7 @@ ICON_SETTINGS = "8.png"   # 设置按钮（两主题相同）
 ICON_THEME    = "15.png"  # 主题菜单图标（两主题相同）
 
 # 当前版本号（发布新版时修改此处，并在 GitHub 创建同名 tag 的 Release）
-VERSION = "1.0.2"
+VERSION = "1.0.4"
 GITHUB_REPO = "DJpygeigei/GifCreatorTool"
 
 
@@ -2701,18 +2701,30 @@ class MainWindow(QMainWindow):
                 script = (
                     "@echo off\n"
                     "chcp 65001 >nul\n"
-                    # 等旧进程释放文件锁（约 4 秒）
+                    # 先等旧进程退出（约 4 秒）
                     "ping -n 5 127.0.0.1 >nul\n"
-                    # 先把旧 exe 重命名为 _old（rename 不需要删除即可执行）
+                    # 清理上次残留 backup
                     f'if exist "{backup_exe}" del /f /q "{backup_exe}"\n'
-                    f'ren "{current_exe}" "GIFTool_old.exe"\n'
-                    # 把下载的新文件重命名为正式名
+                    # 重试循环：等文件锁释放后再 rename
+                    "set TRIES=0\n"
+                    ":retry\n"
+                    "if %TRIES% GEQ 10 goto giveup\n"
+                    f'ren "{current_exe}" "GIFTool_old.exe" 2>nul\n'
+                    "if errorlevel 1 (\n"
+                    "  set /a TRIES+=1\n"
+                    "  ping -n 3 127.0.0.1 >nul\n"
+                    "  goto retry\n"
+                    ")\n"
+                    # rename 成功，把新文件改为正式名
                     f'ren "{new_exe}" "GIFTool.exe"\n'
-                    # 启动新版本
                     f'start "" "{target_exe}"\n'
-                    # 稍等新进程启动后删除备份和脚本
                     "ping -n 3 127.0.0.1 >nul\n"
                     f'del /f /q "{backup_exe}"\n'
+                    'del /f /q "%~f0"\n'
+                    "goto :eof\n"
+                    # 重试失败兜底：直接启动新文件（不替换名字）
+                    ":giveup\n"
+                    f'start "" "{new_exe}"\n'
                     'del /f /q "%~f0"\n'
                 )
                 with open(script_path, "w", encoding="gbk", errors="replace") as f:
