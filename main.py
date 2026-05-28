@@ -482,7 +482,7 @@ ICON_SETTINGS = "8.png"   # 设置按钮（两主题相同）
 ICON_THEME    = "15.png"  # 主题菜单图标（两主题相同）
 
 # 当前版本号（发布新版时修改此处，并在 GitHub 创建同名 tag 的 Release）
-VERSION = "1.0.4"
+VERSION = "1.0.5"
 GITHUB_REPO = "DJpygeigei/GifCreatorTool"
 
 
@@ -2356,8 +2356,10 @@ class UpdateChecker(QThread):
             with open(cache_file, "r", encoding="utf-8") as f:
                 cached = json.load(f)
             if cached.get("date") == today:
-                # 今天已检查过，直接用缓存结果
-                if cached.get("has_update"):
+                # 今天已检查过，但需重新比较版本（防止用户升级后缓存过期）
+                cached_ver = cached.get("version", "")
+                still_newer = self._is_newer(cached_ver, VERSION)
+                if cached.get("has_update") and still_newer:
                     self.update_available.emit(
                         cached["version"],
                         cached["url"],
