@@ -19,25 +19,30 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: |
-          pip install PySide6 pyinstaller pillow
+        run: pip install PySide6 pyinstaller pillow
 
       - name: Download ffmpeg (Windows)
+        shell: pwsh
         run: |
-          curl -L "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -o ffmpeg.zip
-          7z x ffmpeg.zip -offmpeg_extract
-          copy "ffmpeg_extract\ffmpeg-*\bin\ffmpeg.exe" ffmpeg.exe
-          copy "ffmpeg_extract\ffmpeg-*\bin\ffprobe.exe" ffprobe.exe
+          # 用 GitHub Actions 官方 ffmpeg action 更可靠
+          $url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+          Invoke-WebRequest -Uri $url -OutFile ffmpeg.zip
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_extract
+          $bin = (Get-ChildItem -Path ffmpeg_extract -Filter "bin" -Recurse -Directory | Select-Object -First 1).FullName
+          Copy-Item "$bin\ffmpeg.exe"  -Destination "ffmpeg.exe"
+          Copy-Item "$bin\ffprobe.exe" -Destination "ffprobe.exe"
+          Remove-Item ffmpeg.zip, ffmpeg_extract -Recurse -Force
 
       - name: Generate logo.ico
+        shell: pwsh
         run: |
-          python -c "
+          python -c @"
           from PIL import Image
           import os
           if os.path.exists('logo.jpg'):
               img = Image.open('logo.jpg').convert('RGBA')
               img.save('logo.ico', format='ICO', sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])
-          "
+          "@
 
       - name: Build EXE
         run: pyinstaller giftool.spec --noconfirm
@@ -60,29 +65,19 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: |
-          pip install PySide6 pyinstaller pillow
+        run: pip install PySide6 pyinstaller pillow
 
       - name: Install ffmpeg (macOS)
         run: brew install ffmpeg
 
       - name: Copy ffmpeg binaries
         run: |
-          cp $(which ffmpeg) ./ffmpeg
+          cp $(which ffmpeg)  ./ffmpeg
           cp $(which ffprobe) ./ffprobe
 
       - name: Build macOS app
         run: |
-          pyinstaller \
-            --onefile \
-            --windowed \
-            --name GIFTool \
-            --add-data "*.png:." \
-            --hidden-import PySide6.QtMultimedia \
-            --hidden-import PySide6.QtMultimediaWidgets \
-            --add-binary "ffmpeg:." \
-            --add-binary "ffprobe:." \
-            main.py
+          pyinstaller giftool.spec --noconfirm
 
       - name: Package as zip
         run: |
