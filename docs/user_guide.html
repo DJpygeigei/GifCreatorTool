@@ -128,7 +128,7 @@
 <div class="hero">
   <h1>GIFTool 使用说明</h1>
   <p>视频转 GIF &middot; 屏幕录制 GIF &middot; 智能压缩 &middot; 多主题界面</p>
-  <span class="badge">v1.0.2</span>
+  <span class="badge">v1.1.1</span>
 </div>
 
 <div class="container">
@@ -338,7 +338,20 @@
     </div>
     <div class="tip"><span class="icon">💡</span><div>按 <kbd>Esc</kbd> 可取消框选操作，回到正常状态。</div></div>
 
-    <h3 id="recording">4.2 开始 / 停止录制</h3>
+    <h3 id="recording">4.2 录制帧率设置</h3>
+    <p>开始录制前可以设置录制帧率：</p>
+    <table>
+      <thead><tr><th>帧率</th><th>说明</th><th>适合场景</th></tr></thead>
+      <tbody>
+        <tr><td><strong>15 fps</strong></td><td>截图开销小，稳定性好</td><td>文字、图表、慢速操作</td></tr>
+        <tr><td><strong>24 fps</strong></td><td>流畅感接近视频</td><td>一般 UI 操作演示</td></tr>
+        <tr><td><strong>30 fps</strong> <span style="background:#34C759;color:#fff;border-radius:4px;padding:1px 6px;font-size:11px;">默认</span></td><td>平衡帧率与性能，mss 引擎保障稳定捕获</td><td>UI 动效、流畅操作演示</td></tr>
+        <tr><td><strong>50 fps</strong></td><td>GIF 格式理论上限（帧延迟精度 0.01s）</td><td>极流畅动效（文件较大）</td></tr>
+      </tbody>
+    </table>
+    <div class="warn"><span class="icon">⚠️</span><div>实际录制帧率受系统性能影响。工具会自动计算「实际帧数 ÷ 实际录制时长」作为真实帧率写入视频，<strong>不会出现加速/减速问题</strong>。</div></div>
+
+    <h3 id="start-recording">4.3 开始 / 停止录制</h3>
     <div class="steps">
       <div class="step"><div class="step-num">1</div><div class="step-body"><strong>点击「开始录制」</strong>：按钮变为「停止录制」，右侧计时器开始计时</div></div>
       <div class="step"><div class="step-num">2</div><div class="step-body"><strong>操作屏幕内容</strong>：工具在后台实时捕获选定区域的画面</div></div>
@@ -350,16 +363,35 @@
       <div class="img-caption">录制进行中：计时器显示已录制时长，停止按钮高亮</div>
     </div>
 
-    <h3 id="record-to-gif">4.3 录制内容转 GIF</h3>
-    <p>录制完成后，界面与「视频转 GIF」完全一致，可进行：</p>
-    <ul style="padding-left:20px; margin:8px 0;">
-      <li style="margin:6px 0">使用时间范围滑块裁剪录制内容</li>
-      <li style="margin:6px 0">用「预览片段」按钮确认效果</li>
-      <li style="margin:6px 0">调整 GIF 帧率、分辨率、抖动算法</li>
-      <li style="margin:6px 0">选择压缩模式</li>
-      <li style="margin:6px 0">点击「开始转换」生成 GIF</li>
-    </ul>
-    <div class="tip"><span class="icon">🎯</span><div>录制帧率建议设置为 15~24 fps。GIF 格式上限 50fps，过高的录制帧率不会提升最终 GIF 质量，只会增加文件大小。</div></div>
+    <h3 id="record-to-gif">4.4 录制内容转 GIF</h3>
+    <p>录制完成后，右侧面板与「视频转 GIF」完全一致，可进行时间裁剪、参数调整，再选择以下两种输出方式：</p>
+
+    <table>
+      <thead><tr><th>方式</th><th>操作</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>📋 复制 GIF 到剪贴板</strong></td>
+          <td>点击绿色按钮</td>
+          <td>无需指定保存路径，直接生成 GIF 并复制，可粘贴到微信、钉钉、邮件、PPT 等任意应用</td>
+        </tr>
+        <tr>
+          <td><strong>开始转换（保存文件）</strong></td>
+          <td>设置输出路径后点击蓝色按钮</td>
+          <td>将 GIF 保存到指定文件路径，完成后显示实际文件大小</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="tip"><span class="icon">📋</span>
+      <div>
+        <strong>复制 GIF 智能缓存：</strong><br>
+        &bull; 已转换过且参数未变 → 直接复制，无需重新生成<br>
+        &bull; 修改了时间范围或任意参数 → 自动重新生成后再复制<br>
+        &bull; 重新录制后 → 自动清除旧缓存
+      </div>
+    </div>
+
+    <div class="tip"><span class="icon">📐</span><div>输出设置里同时显示「预估大小」（转换前）和「实际大小」（转换完成后），方便对比压缩效果。</div></div>
   </section>
 
 
@@ -426,15 +458,21 @@
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 8px; font-size:15px;">Q：指定目标大小模式转换很慢？</h3>
-      <p style="margin:0; color:var(--muted)">A：该模式最多进行 9 次迭代搜索最优参数，耗时是普通模式的数倍，属于正常现象。如对速度有要求，建议使用「保持分辨率」或「保持帧率」模式替代。</p>
+      <h3 style="margin:0 0 8px; font-size:15px;">Q：复制 GIF 后粘贴到软件里没有动画效果？</h3>
+      <p style="margin:0; color:var(--muted)">A：部分应用（如 Outlook、Word）粘贴时会将 GIF 转为静态图片。建议改用「开始转换」保存为文件后再手动插入，或使用支持 GIF 动画的应用（微信、钉钉、飞书等）直接粘贴。</p>
     </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px; font-size:15px;">Q：录制的 GIF 感觉像是加速了？</h3>
+      <p style="margin:0; color:var(--muted)">A：v1.1.0 起已修复此问题。工具会自动用「实际帧数 ÷ 实际录制时长」计算真实帧率写入视频，不再依赖目标帧率。请确认使用的是 v1.1.0 或更新版本。</p>
+    </div>
+
   </section>
 
 </div>
 
 <footer>
-  <p>GIFTool v1.0.2 &nbsp;&middot;&nbsp; <a href="https://github.com/DJpygeigei/GifCreatorTool">GitHub</a> &nbsp;&middot;&nbsp; 联系开发者：POPO wupengyu1@corp.netease.com</p>
+  <p>GIFTool v1.1.1 &nbsp;&middot;&nbsp; <a href="https://github.com/DJpygeigei/GifCreatorTool">GitHub</a> &nbsp;&middot;&nbsp; 联系开发者：POPO wupengyu1@corp.netease.com</p>
   <p style="margin-top:6px; opacity:0.6">© 2026 wupengyu1. All rights reserved.</p>
 </footer>
 

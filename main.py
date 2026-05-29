@@ -2054,7 +2054,7 @@ class RecordTab(QWidget):
         fps_row.addWidget(QLabel("录制帧率:"))
         self.rec_fps_spin = QSpinBox()
         self.rec_fps_spin.setRange(1, 50)
-        self.rec_fps_spin.setValue(15)
+        self.rec_fps_spin.setValue(30)
         self.rec_fps_spin.setToolTip("录制时的帧率，GIF 最高 50fps")
         self.rec_fps_spin.setFixedWidth(70)
         fps_row.addWidget(self.rec_fps_spin)
