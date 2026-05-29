@@ -2174,14 +2174,21 @@ class RecordTab(QWidget):
         splitter.setSizes([600, 380])
         main_layout.addWidget(splitter, stretch=1)
 
-        # ── 信号连接（预估大小实时更新）──
+        # ── 信号连接（预估大小实时更新 + 参数变化清 GIF 缓存）──
         self.range_w.rangeChanged.connect(self._update_estimate)
+        self.range_w.rangeChanged.connect(self._clear_gif_cache)
         self.params.fps_spin.valueChanged.connect(self._update_estimate)
+        self.params.fps_spin.valueChanged.connect(self._clear_gif_cache)
         self.params.w_spin.valueChanged.connect(self._update_estimate)
+        self.params.w_spin.valueChanged.connect(self._clear_gif_cache)
         self.params.h_spin.valueChanged.connect(self._update_estimate)
+        self.params.h_spin.valueChanged.connect(self._clear_gif_cache)
         self.compress.grp.buttonToggled.connect(self._update_estimate)
+        self.compress.grp.buttonToggled.connect(self._clear_gif_cache)
         self.compress.sub_grp.buttonToggled.connect(self._update_estimate)
+        self.compress.sub_grp.buttonToggled.connect(self._clear_gif_cache)
         self.compress.size_spin.valueChanged.connect(self._update_estimate)
+        self.compress.size_spin.valueChanged.connect(self._clear_gif_cache)
 
     # ── 框选区域 ─────────────────────────────────────────────────
     def _select_region(self):
@@ -2278,6 +2285,8 @@ class RecordTab(QWidget):
         self.select_btn.setEnabled(True)
         self.rec_fps_spin.setEnabled(True)
         self._src_video = path
+        self._last_gif  = None   # 新录制完成，清掉旧 GIF 缓存
+        self.actual_size_lbl.setText("--")
 
         # 检查文件是否有效
         if not os.path.exists(path) or os.path.getsize(path) < 1024:
@@ -2342,6 +2351,10 @@ class RecordTab(QWidget):
             self.size_lbl.setText(format_size(nb))
         except Exception:
             self.size_lbl.setText("--")
+
+    def _clear_gif_cache(self, *_):
+        """参数变化时清掉上次转换缓存，确保复制按钮用新参数重新生成"""
+        self._last_gif = None
 
     # ── 开始转换 ─────────────────────────────────────────────────
     def _start_convert(self):
