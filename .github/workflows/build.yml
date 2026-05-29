@@ -2,10 +2,9 @@ name: Build & Release
 
 on:
   push:
-    branches: [master, main]
     tags:
-      - 'v*'
-  workflow_dispatch:
+      - 'v*'          # 只有推 vX.X.X tag 才触发
+  workflow_dispatch:  # 手动触发保留
 
 jobs:
   build-windows:
