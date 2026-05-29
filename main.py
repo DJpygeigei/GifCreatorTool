@@ -1869,6 +1869,7 @@ class RecordThread(QThread):
 
             start = time.time()
             frame_count = 0
+            last_tick = start
 
             while not self._stop_flag:
                 t0 = time.time()
@@ -1891,6 +1892,9 @@ class RecordThread(QThread):
                 if sleep_t > 0:
                     time.sleep(sleep_t)
 
+            # 记录实际录制时长
+            actual_duration = time.time() - start
+
             # 关闭 stdin 通知 ffmpeg 结束
             try:
                 self._proc.stdin.close()
@@ -1912,14 +1916,21 @@ class RecordThread(QThread):
                 self.error.emit(f"编码失败，输出文件为空（已截取 {frame_count} 帧）")
                 return
 
-            # ── Remux: 加 faststart，QMediaPlayer 才能正常播放 ──
+            # ── Remux: 修正帧率 + 加 faststart ──
+            # 用实际帧数/实际时长算真实 fps，避免加速/减速问题
+            actual_fps = frame_count / actual_duration if actual_duration > 0 else self.fps
+            actual_fps = max(1.0, round(actual_fps, 3))
+
             raw_path = self.output_path.replace(".mp4", "_raw.mp4")
             final_path = self.output_path
             try:
                 os.rename(self.output_path, raw_path)
                 remux_cmd = [
-                    FFMPEG, "-y", "-i", raw_path,
-                    "-c", "copy", "-movflags", "+faststart",
+                    FFMPEG, "-y",
+                    "-r", str(actual_fps),   # 用实际 fps 覆盖录制时写入的名义帧率
+                    "-i", raw_path,
+                    "-c", "copy",
+                    "-movflags", "+faststart",
                     final_path
                 ]
                 subprocess.run(remux_cmd, capture_output=True, timeout=60, creationflags=flags)
