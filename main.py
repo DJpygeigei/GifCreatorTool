@@ -2836,6 +2836,7 @@ class UpdateChecker(QThread):
                     self.no_update.emit()
                     return
                 if e.code == 403:
+                    # Rate limit：静默处理，不打扰用户；手动检查时由调用方标记
                     self.check_error.emit("rate_limit")
                     return
                 raise
@@ -2850,8 +2851,8 @@ class UpdateChecker(QThread):
                     break
 
             if not download_url:
-                self.check_error.emit("Release 中未找到 GIFTool.exe 资产\n请确认 Release 中上传了名为 GIFTool.exe 的文件")
-                return
+                # 找不到 asset 时用 releases/latest 页面作为兜底
+                download_url = f"https://github.com/{GITHUB_REPO}/releases/latest"
 
             has_update = self._is_newer(latest_tag, VERSION)
             self._save_cache(cache_file, today, has_update,
@@ -3056,12 +3057,27 @@ class MainWindow(QMainWindow):
     def _on_check_error(self, msg):
         try:
             self._check_dlg.close()
+            is_manual = True   # 有对话框说明是手动触发
         except Exception:
-            pass
+            is_manual = False  # 后台自动检查，静默
+        if not is_manual:
+            return
         if msg == "rate_limit":
-            QMessageBox.information(self, "检查更新",
-                "GitHub 请求次数已达上限（每小时 60 次），请稍后再试。\n\n"
-                f"当前版本: v{VERSION}")
+            box = QMessageBox(self)
+            box.setWindowTitle("检查更新")
+            box.setText("GitHub API 请求频率受限，无法自动获取版本信息。")
+            box.setInformativeText(
+                f"当前版本：v{VERSION}\n\n"
+                "可前往 GitHub Releases 页面手动查看最新版本：\n"
+                f"https://github.com/{GITHUB_REPO}/releases/latest"
+            )
+            box.setIcon(QMessageBox.Information)
+            dl_btn = box.addButton("打开下载页", QMessageBox.AcceptRole)
+            box.addButton("关闭", QMessageBox.RejectRole)
+            box.exec()
+            if box.clickedButton() == dl_btn:
+                import webbrowser
+                webbrowser.open(f"https://github.com/{GITHUB_REPO}/releases/latest")
         else:
             QMessageBox.warning(self, "检查更新失败", f"无法连接到 GitHub:\n{msg}")
 
