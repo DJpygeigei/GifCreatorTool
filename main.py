@@ -21,8 +21,8 @@ from PySide6.QtWidgets import (
     QSizePolicy, QLineEdit, QComboBox, QMessageBox, QSplitter, QTabWidget,
     QRubberBand
 )
-from PySide6.QtCore import Qt, QThread, Signal, QTimer, QUrl, QRect, QSize, QPoint
-from PySide6.QtGui import QDragEnterEvent, QDropEvent, QFont, QPainter, QColor
+from PySide6.QtCore import Qt, QThread, Signal, QTimer, QUrl, QRect, QSize, QPoint, QRectF
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QFont, QPainter, QColor, QPen, QBrush, QCursor
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PySide6.QtMultimediaWidgets import QVideoWidget
 
@@ -1447,12 +1447,8 @@ class VideoTab(QWidget):
             )
             self.range_w.set_duration(d)
             self.params.set_source_info(info)
-            self.params.fps_spin.setValue(min(15, max(1, int(fps))))
-            sw = min(480, w)
-            sh = max(2, int(sw * h / w)) if w > 0 else 270
-            sh = sh + (sh % 2)
-            self.params.w_spin.setValue(sw)
-            self.params.h_spin.setValue(sh)
+            self.params._match_fps()   # 自动匹配源帧率（上限 50fps）
+            self.params._match_res()   # 自动匹配源分辨率
             self.player.load(path, fps)
         self.out_edit.setText(str(Path(path).with_suffix(".gif")))
         self.convert_btn.setEnabled(True)
@@ -1671,9 +1667,8 @@ class GifEditorTab(QWidget):
             )
             self.range_w.set_duration(d)
             self.params.set_source_info(info)
-            self.params.fps_spin.setValue(min(30, max(1, int(fps))))
-            self.params.w_spin.setValue(w)
-            self.params.h_spin.setValue(h)
+            self.params._match_fps()   # 自动匹配源帧率（上限 50fps）
+            self.params._match_res()   # 自动匹配源分辨率
             self.player.load(path, fps)
         # auto output: _edit suffix
         p = Path(path)
@@ -1750,6 +1745,252 @@ class GifEditorTab(QWidget):
 
 
 # ───────────────────────── Screen Region Selector ─────────────────────
+class RegionOverlay(QWidget):
+    """
+    录制区域可视化覆盖层。
+    显示在录制区域上方，带 8 个方向拖拽手柄，可实时调整录制区域大小。
+    """
+    region_changed = Signal(int, int, int, int)   # x, y, w, h (屏幕坐标)
+    reselect_requested = Signal()                  # 用户点击"重新框选"
+
+    _HANDLE_SIZE = 10       # 手柄方块像素
+    _MIN_SIZE    = 40       # 最小宽/高
+    _BORDER      = 2        # 边框厚度
+
+    # 8 个方向编号
+    _TL, _TC, _TR = 0, 1, 2
+    _ML,       _MR = 3,    4
+    _BL, _BC, _BR = 5, 6, 7
+
+    def __init__(self, x: int, y: int, w: int, h: int, parent=None):
+        super().__init__(parent)
+        self._rx = x; self._ry = y
+        self._rw = max(w, self._MIN_SIZE)
+        self._rh = max(h, self._MIN_SIZE)
+
+        self.setWindowFlags(
+            Qt.FramelessWindowHint |
+            Qt.WindowStaysOnTopHint |
+            Qt.Tool |
+            Qt.WindowTransparentForInput  # 先关闭，setMouseTracking 后再打开
+        )
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
+        # 不可点击穿透（需要拦截鼠标）
+        self.setWindowFlags(
+            Qt.FramelessWindowHint |
+            Qt.WindowStaysOnTopHint |
+            Qt.Tool
+        )
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
+        self.setMouseTracking(True)
+
+        self._drag_handle = None     # 正在拖拽的手柄编号
+        self._drag_start_pos = None  # 拖拽起始鼠标位置（全局坐标）
+        self._drag_start_rect = None # 拖拽起始区域 (rx,ry,rw,rh)
+
+        # 工具按钮区域（在 overlay 内部右上角）
+        self._btn_h = 26   # 按钮行高度
+        self._reselect_rect = QRect()
+        self._close_rect = QRect()
+
+        self._update_geometry()
+        self.show()
+
+    def _update_geometry(self):
+        """根据录制区域坐标更新 overlay 窗口几何"""
+        pad = self._HANDLE_SIZE + 2
+        btn_extra = self._btn_h + 4   # 顶部留出按钮空间
+        self.setGeometry(
+            self._rx - pad,
+            self._ry - pad - btn_extra,
+            self._rw + pad * 2,
+            self._rh + pad * 2 + btn_extra
+        )
+        self.update()
+
+    def _inner_rect(self) -> QRect:
+        """overlay 内部坐标系中的录制区域矩形"""
+        pad = self._HANDLE_SIZE + 2
+        btn_extra = self._btn_h + 4
+        return QRect(pad, pad + btn_extra, self._rw, self._rh)
+
+    def _handle_rects(self):
+        """返回 8 个手柄在 overlay 内部坐标的 QRect 列表"""
+        r = self._inner_rect()
+        hs = self._HANDLE_SIZE
+        cx = r.center().x();  cy = r.center().y()
+        return [
+            QRect(r.left()  - hs//2, r.top()    - hs//2, hs, hs),   # TL
+            QRect(cx        - hs//2, r.top()    - hs//2, hs, hs),   # TC
+            QRect(r.right() - hs//2, r.top()    - hs//2, hs, hs),   # TR
+            QRect(r.left()  - hs//2, cy         - hs//2, hs, hs),   # ML
+            QRect(r.right() - hs//2, cy         - hs//2, hs, hs),   # MR
+            QRect(r.left()  - hs//2, r.bottom() - hs//2, hs, hs),   # BL
+            QRect(cx        - hs//2, r.bottom() - hs//2, hs, hs),   # BC
+            QRect(r.right() - hs//2, r.bottom() - hs//2, hs, hs),   # BR
+        ]
+
+    def _hit_handle(self, pos: QPoint) -> int:
+        """鼠标是否命中某个手柄，返回编号或 -1"""
+        for i, hr in enumerate(self._handle_rects()):
+            if hr.contains(pos):
+                return i
+        return -1
+
+    def _cursor_for_handle(self, idx: int) -> Qt.CursorShape:
+        cursors = {
+            self._TL: Qt.SizeFDiagCursor,
+            self._TR: Qt.SizeBDiagCursor,
+            self._BL: Qt.SizeBDiagCursor,
+            self._BR: Qt.SizeFDiagCursor,
+            self._TC: Qt.SizeVerCursor,
+            self._BC: Qt.SizeVerCursor,
+            self._ML: Qt.SizeHorCursor,
+            self._MR: Qt.SizeHorCursor,
+        }
+        return cursors.get(idx, Qt.ArrowCursor)
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+
+        r = self._inner_rect()
+
+        # ── 边框 ──
+        pen = QPen(QColor(0, 113, 227, 220), self._BORDER)
+        p.setPen(pen)
+        p.setBrush(Qt.NoBrush)
+        p.drawRect(r)
+
+        # ── 四角红色辅助线（可选，增强视觉） ──
+        corner_len = 12
+        p.setPen(QPen(QColor(255, 80, 80, 240), 3))
+        for cx, cy, dx, dy in [
+            (r.left(), r.top(), 1, 1),
+            (r.right(), r.top(), -1, 1),
+            (r.left(), r.bottom(), 1, -1),
+            (r.right(), r.bottom(), -1, -1),
+        ]:
+            p.drawLine(cx, cy, cx + dx * corner_len, cy)
+            p.drawLine(cx, cy, cx, cy + dy * corner_len)
+
+        # ── 8 个手柄 ──
+        p.setPen(QPen(QColor(0, 113, 227), 1))
+        p.setBrush(QBrush(QColor(255, 255, 255, 220)))
+        for hr in self._handle_rects():
+            p.drawRect(hr)
+
+        # ── 顶部按钮区 ──
+        btn_extra = self._btn_h + 4
+        bar_rect = QRect(r.left(), 2, r.width(), self._btn_h)
+
+        # 背景
+        p.setBrush(QBrush(QColor(30, 30, 30, 200)))
+        p.setPen(Qt.NoPen)
+        p.drawRoundedRect(bar_rect, 5, 5)
+
+        # 尺寸文字
+        p.setPen(QColor(255, 255, 255))
+        fm = p.fontMetrics()
+        size_txt = f"录制区域  {self._rw} × {self._rh} px"
+        txt_w = fm.horizontalAdvance(size_txt)
+
+        # "重新框选" 按钮
+        btn_w = 70
+        self._reselect_rect = QRect(bar_rect.right() - btn_w * 2 - 6,
+                                    bar_rect.top() + 3, btn_w, self._btn_h - 6)
+        p.setBrush(QBrush(QColor(0, 113, 227, 200)))
+        p.setPen(Qt.NoPen)
+        p.drawRoundedRect(self._reselect_rect, 4, 4)
+        p.setPen(QColor(255, 255, 255))
+        p.drawText(self._reselect_rect, Qt.AlignCenter, "重新框选")
+
+        # "隐藏" 按钮
+        close_w = 40
+        self._close_rect = QRect(bar_rect.right() - close_w - 3,
+                                  bar_rect.top() + 3, close_w, self._btn_h - 6)
+        p.setBrush(QBrush(QColor(180, 60, 60, 200)))
+        p.setPen(Qt.NoPen)
+        p.drawRoundedRect(self._close_rect, 4, 4)
+        p.setPen(QColor(255, 255, 255))
+        p.drawText(self._close_rect, Qt.AlignCenter, "隐藏")
+
+        # 尺寸文字
+        txt_rect = QRect(bar_rect.left() + 6, bar_rect.top(),
+                         bar_rect.width() - btn_w * 2 - close_w - 20, self._btn_h)
+        p.setPen(QColor(200, 200, 200))
+        p.drawText(txt_rect, Qt.AlignVCenter | Qt.AlignLeft, size_txt)
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.LeftButton:
+            pos = e.pos()
+            # 检查按钮点击
+            if self._reselect_rect.contains(pos):
+                self.reselect_requested.emit()
+                return
+            if self._close_rect.contains(pos):
+                self.hide()
+                return
+            # 检查手柄拖拽
+            idx = self._hit_handle(pos)
+            if idx >= 0:
+                self._drag_handle = idx
+                self._drag_start_pos = e.globalPosition().toPoint()
+                self._drag_start_rect = (self._rx, self._ry, self._rw, self._rh)
+
+    def mouseMoveEvent(self, e):
+        pos = e.pos()
+        if self._drag_handle is not None:
+            gp = e.globalPosition().toPoint()
+            dx = gp.x() - self._drag_start_pos.x()
+            dy = gp.y() - self._drag_start_pos.y()
+            ox, oy, ow, oh = self._drag_start_rect
+            nx, ny, nw, nh = ox, oy, ow, oh
+
+            idx = self._drag_handle
+            if idx in (self._TL, self._ML, self._BL):   # 左边
+                nx = ox + dx
+                nw = max(self._MIN_SIZE, ow - dx)
+                if nw == self._MIN_SIZE:
+                    nx = ox + ow - self._MIN_SIZE
+            if idx in (self._TR, self._MR, self._BR):   # 右边
+                nw = max(self._MIN_SIZE, ow + dx)
+            if idx in (self._TL, self._TC, self._TR):   # 上边
+                ny = oy + dy
+                nh = max(self._MIN_SIZE, oh - dy)
+                if nh == self._MIN_SIZE:
+                    ny = oy + oh - self._MIN_SIZE
+            if idx in (self._BL, self._BC, self._BR):   # 下边
+                nh = max(self._MIN_SIZE, oh + dy)
+
+            # 偶数对齐（ffmpeg 要求）
+            nw = nw & ~1;  nh = nh & ~1
+            self._rx = nx; self._ry = ny
+            self._rw = nw; self._rh = nh
+            self._update_geometry()
+            self.region_changed.emit(self._rx, self._ry, self._rw, self._rh)
+        else:
+            # 更新鼠标形状
+            idx = self._hit_handle(pos)
+            if idx >= 0:
+                self.setCursor(QCursor(self._cursor_for_handle(idx)))
+            else:
+                self.setCursor(QCursor(Qt.ArrowCursor))
+
+    def mouseReleaseEvent(self, e):
+        if e.button() == Qt.LeftButton:
+            self._drag_handle = None
+
+    def update_region(self, x: int, y: int, w: int, h: int):
+        """外部更新区域坐标（框选后调用）"""
+        self._rx = x; self._ry = y
+        self._rw = max(w, self._MIN_SIZE) & ~1
+        self._rh = max(h, self._MIN_SIZE) & ~1
+        self._update_geometry()
+
+
 class ScreenRegionSelector(QWidget):
     """全屏半透明遮罩，拖拽框选录制区域"""
     region_selected = Signal(int, int, int, int)   # x, y, w, h (屏幕坐标)
@@ -2008,6 +2249,7 @@ class RecordTab(QWidget):
     def __init__(self):
         super().__init__()
         self._region = None          # (x, y, w, h)
+        self._overlay = None         # RegionOverlay 实例
         self._record_thread = None
         self._record_sec = 0
         self._tick_timer = QTimer(self)
@@ -2191,6 +2433,20 @@ class RecordTab(QWidget):
         self.compress.size_spin.valueChanged.connect(self._clear_gif_cache)
 
     # ── 框选区域 ─────────────────────────────────────────────────
+    def _on_overlay_region_changed(self, x, y, w, h):
+        """overlay 拖拽手柄调整区域后同步"""
+        self._region = (x, y, w, h)
+        self.region_lbl.setText(f"区域: ({x}, {y})  {w} × {h} px")
+        # 更新 GIF 参数宽高
+        self.params.set_source_info({
+            "width": w, "height": h,
+            "fps": float(self.rec_fps_spin.value()),
+            "duration": 0.0
+        })
+        self.params._match_res()
+        self._src_w = w
+        self._src_h = h
+
     def _select_region(self):
         # 最小化主窗口避免遮挡
         win = self.window()
@@ -2211,14 +2467,25 @@ class RecordTab(QWidget):
         self.region_lbl.setText(f"区域: ({x}, {y})  {w} × {h} px")
         self.record_btn.setEnabled(True)
         self.rec_status_lbl.setText("已选择区域，可开始录制")
-        # 同步 GIF 参数宽高
+        # 同步 GIF 参数宽高（自动匹配，支持竖屏）
         self.params.set_source_info({
             "width": w, "height": h,
             "fps": float(self.rec_fps_spin.value()),
             "duration": 0.0
         })
+        self.params._match_res()   # 自动同步宽高到 w_spin/h_spin，修复竖屏拉伸
         self._src_w = w
         self._src_h = h
+
+        # 创建/更新区域覆盖层
+        if self._overlay is not None:
+            try:
+                self._overlay.close()
+            except Exception:
+                pass
+        self._overlay = RegionOverlay(x, y, w, h)
+        self._overlay.region_changed.connect(self._on_overlay_region_changed)
+        self._overlay.reselect_requested.connect(self._select_region)
 
     # ── 录制控制 ─────────────────────────────────────────────────
     def _toggle_record(self):
@@ -2965,6 +3232,15 @@ class MainWindow(QMainWindow):
         self.gif_tab.range_w.apply_theme_icons(theme)
         # 设置按钮图标保持不变（两主题相同）
         _set_btn_icon(self.settings_btn, ICON_SETTINGS, size=26)
+
+    def closeEvent(self, e):
+        """主窗口关闭时销毁 overlay"""
+        try:
+            if self.record_tab._overlay is not None:
+                self.record_tab._overlay.close()
+        except Exception:
+            pass
+        super().closeEvent(e)
 
 
 # ───────────────────────────── Entry Point ────────────────────────────

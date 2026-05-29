@@ -1,17 +1,19 @@
-name: Build GIFTool
+name: Build & Release
 
 on:
   push:
+    branches: [master, main]
     tags:
-      - 'v*'          # 推送 v1.0.0 这样的 tag 时触发
-  workflow_dispatch:  # 也可以手动触发
+      - 'v*'
+  workflow_dispatch:
 
 jobs:
-  # ─────────── Windows EXE ───────────
   build-windows:
     runs-on: windows-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -19,117 +21,34 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install PySide6 pyinstaller pillow mss
-
-      - name: Download ffmpeg (Windows)
-        shell: pwsh
         run: |
-          # 用 GitHub Actions 官方 ffmpeg action 更可靠
-          $url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
-          Invoke-WebRequest -Uri $url -OutFile ffmpeg.zip
-          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_extract
-          $bin = (Get-ChildItem -Path ffmpeg_extract -Filter "bin" -Recurse -Directory | Select-Object -First 1).FullName
-          Copy-Item "$bin\ffmpeg.exe"  -Destination "ffmpeg.exe"
-          Copy-Item "$bin\ffprobe.exe" -Destination "ffprobe.exe"
-          Remove-Item ffmpeg.zip, ffmpeg_extract -Recurse -Force
+          python -m pip install --upgrade pip
+          pip install PySide6 Pillow mss numpy pyinstaller
 
-      - name: Generate logo.ico
-        shell: pwsh
+      - name: Download ffmpeg
         run: |
-          python -c @"
-          from PIL import Image
-          import os
-          if os.path.exists('logo.jpg'):
-              img = Image.open('logo.jpg').convert('RGBA')
-              img.save('logo.ico', format='ICO', sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])
-          "@
+          curl -L "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip" -o ffmpeg.zip
+          7z e ffmpeg.zip "*/bin/ffmpeg.exe" "*/bin/ffprobe.exe" -r -o. -y
+          dir ffmpeg.exe ffprobe.exe
 
-      - name: Set version from tag
-        shell: pwsh
+      - name: Build exe
         run: |
-          $tag = "${{ github.ref_name }}"          # e.g. v1.0.8
-          $ver = $tag.TrimStart('v')               # e.g. 1.0.8
-          (Get-Content main.py) -replace 'VERSION\s*=\s*"[^"]+"', "VERSION = `"$ver`"" |
-            Set-Content main.py -Encoding UTF8
-          Write-Host "VERSION set to $ver"
+          python -m PyInstaller giftool.spec --noconfirm
 
-      - name: Build EXE
-        run: pyinstaller giftool.spec --noconfirm
+      - name: Get short SHA
+        id: sha
+        run: echo "sha=$(git rev-parse --short HEAD)" >> $env:GITHUB_OUTPUT
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GIFTool-Windows
+          name: GIFTool-windows-${{ steps.sha.outputs.sha }}
           path: dist/GIFTool.exe
+          retention-days: 30
 
-  # ─────────── macOS APP ───────────
-  build-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        run: pip install PySide6 pyinstaller pillow mss
-
-      - name: Install ffmpeg (macOS)
-        run: brew install ffmpeg
-
-      - name: Copy ffmpeg binaries
-        run: |
-          cp $(which ffmpeg)  ./ffmpeg
-          cp $(which ffprobe) ./ffprobe
-
-      - name: Set version from tag
-        run: |
-          TAG="${{ github.ref_name }}"
-          VER="${TAG#v}"
-          sed -i '' "s/VERSION = \"[^\"]*\"/VERSION = \"$VER\"/" main.py
-          echo "VERSION set to $VER"
-
-      - name: Build macOS app
-        run: |
-          pyinstaller giftool.spec --noconfirm
-
-      - name: Package as zip
-        run: |
-          cd dist
-          zip -r GIFTool-macOS.zip GIFTool.app
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: GIFTool-macOS
-          path: dist/GIFTool-macOS.zip
-
-  # ─────────── 发布到 Release ───────────
-  release:
-    needs: [build-windows, build-macos]
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-    permissions:
-      contents: write
-    steps:
-      - name: Download Windows artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: GIFTool-Windows
-          path: ./artifacts
-
-      - name: Download macOS artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: GIFTool-macOS
-          path: ./artifacts
-
-      - name: Create Release
+      - name: Create Release (tag push only)
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            artifacts/GIFTool.exe
-            artifacts/GIFTool-macOS.zip
+          files: dist/GIFTool.exe
           generate_release_notes: true
