@@ -67,3 +67,57 @@ jobs:
         with:
           files: dist/GIFTool.exe
           generate_release_notes: true
+
+  # ─────────── macOS APP ───────────
+  build-macos:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install PySide6 pyinstaller pillow mss
+
+      - name: Install ffmpeg (macOS)
+        run: brew install ffmpeg
+
+      - name: Copy ffmpeg binaries
+        run: |
+          cp $(which ffmpeg)  ./ffmpeg
+          cp $(which ffprobe) ./ffprobe
+
+      - name: Set version from tag
+        run: |
+          VER="${{ github.ref_name }}"
+          VER="${VER#v}"
+          sed -i '' "s/VERSION = \"[^\"]*\"/VERSION = \"$VER\"/" main.py
+          echo "VERSION set to $VER"
+
+      - name: Build macOS app
+        run: pyinstaller giftool.spec --noconfirm
+
+      - name: Package as zip
+        run: |
+          cd dist
+          zip -r GIFTool-macOS.zip GIFTool.app
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GIFTool-macOS
+          path: dist/GIFTool-macOS.zip
+          retention-days: 30
+
+      - name: Create Release (tag push only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/GIFTool-macOS.zip
+          generate_release_notes: false
