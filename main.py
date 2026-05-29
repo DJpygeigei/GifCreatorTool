@@ -2196,6 +2196,7 @@ class RecordTab(QWidget):
         self.rec_fps_spin.setEnabled(False)
         self.rec_status_lbl.setText("录制中...")
         self.convert_btn.setEnabled(False)
+        self.copy_btn.setEnabled(False)
 
         self._record_thread = RecordThread(x, y, w, h, fps, self._tmp_video)
         self._record_thread.tick.connect(self._on_record_tick)
@@ -2255,6 +2256,7 @@ class RecordTab(QWidget):
             self.range_w.set_duration(dur)
 
         self.convert_btn.setEnabled(True)
+        self.copy_btn.setEnabled(True)
         self._update_estimate()
 
     def _on_record_error(self, msg):
