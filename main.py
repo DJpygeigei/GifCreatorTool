@@ -1966,6 +1966,7 @@ class RecordTab(QWidget):
         self._src_fps   = 0.0
         self._src_w = 0
         self._src_h = 0
+        self._last_gif  = None       # 最近一次转换完成的 GIF 路径
         self._build_ui()
 
     def _build_ui(self):
@@ -2075,17 +2076,35 @@ class RecordTab(QWidget):
         out_row.addWidget(browse_btn)
         out_lay.addLayout(out_row)
 
-        # 预估大小
+        # 预估大小 + 实际大小
         size_row = QHBoxLayout()
-        size_row.addWidget(QLabel("预估文件大小:"))
+        size_row.addWidget(QLabel("预估大小:"))
         self.size_lbl = QLabel("--")
         self.size_lbl.setObjectName("timeLabel")
         size_row.addWidget(self.size_lbl)
+        size_row.addSpacing(20)
+        size_row.addWidget(QLabel("实际大小:"))
+        self.actual_size_lbl = QLabel("--")
+        self.actual_size_lbl.setObjectName("timeLabel")
+        size_row.addWidget(self.actual_size_lbl)
         size_row.addStretch()
         out_lay.addLayout(size_row)
         rv.addWidget(out_box)
 
         rv.addStretch()
+
+        # 复制 GIF 按钮（转换到临时文件后直接复制到剪贴板，无需保存）
+        self.copy_btn = QPushButton("📋  复制 GIF 到剪贴板")
+        self.copy_btn.setObjectName("primaryBtn")
+        self.copy_btn.setEnabled(False)
+        self.copy_btn.setStyleSheet(
+            "QPushButton#primaryBtn { background-color: #34C759; }"
+            "QPushButton#primaryBtn:hover { background-color: #2EB350; }"
+            "QPushButton#primaryBtn:pressed { background-color: #248A40; }"
+            "QPushButton#primaryBtn:disabled { background-color: #A8C8F0; }"
+        )
+        self.copy_btn.clicked.connect(self._copy_gif)
+        rv.addWidget(self.copy_btn)
 
         # 转换按钮
         self.convert_btn = QPushButton("开始转换")
@@ -2321,8 +2340,17 @@ class RecordTab(QWidget):
     def _on_done(self, out):
         self.progress.setValue(100)
         self.progress.setVisible(False)
-        self.status_lbl.setText(f"完成: {out}")
         self.convert_btn.setEnabled(True)
+        # 显示实际文件大小
+        try:
+            actual = os.path.getsize(out)
+            self.actual_size_lbl.setText(format_size(actual))
+        except Exception:
+            pass
+        self.status_lbl.setText(f"完成 ✓  {format_size(os.path.getsize(out) if os.path.exists(out) else 0)}")
+        # 记录最后生成的 GIF 路径，供复制按钮使用
+        self._last_gif = out
+        self.copy_btn.setEnabled(True)
         r = QMessageBox.question(
             self, "转换完成",
             f"GIF 已保存到:\n{out}\n\n是否打开所在文件夹？",
@@ -2335,6 +2363,99 @@ class RecordTab(QWidget):
         self.status_lbl.setText(f"❌ 错误: {msg}")
         self.convert_btn.setEnabled(True)
         QMessageBox.critical(self, "转换失败", msg)
+
+    def _copy_gif(self):
+        """将 GIF 复制到系统剪贴板（先转换到临时文件，再复制）"""
+        if not self._src_video or not os.path.exists(self._src_video):
+            QMessageBox.warning(self, "提示", "请先完成屏幕录制")
+            return
+
+        # 如果已有转换结果且文件存在，直接复制；否则先转换到临时文件
+        if self._last_gif and os.path.exists(self._last_gif):
+            self._do_copy_to_clipboard(self._last_gif)
+            return
+
+        # 生成临时 GIF 文件
+        import tempfile
+        tmp_gif = os.path.join(tempfile.gettempdir(), "giftool_copy_tmp.gif")
+
+        s = self.range_w.start_sec
+        e = self.range_w.end_sec
+        if e <= s:
+            QMessageBox.warning(self, "时间范围错误", "结束时间必须大于开始时间")
+            return
+
+        params = dict(
+            input_path=self._src_video,
+            output_path=tmp_gif,
+            start_sec=s,
+            end_sec=e,
+            fps=self.params.fps,
+            width=self.params.width,
+            height=self.params.height,
+            dither=self.params.dither,
+            compress_mode=self.compress.mode,
+            target_size_mb=self.compress.target_mb,
+        )
+
+        self.copy_btn.setEnabled(False)
+        self.convert_btn.setEnabled(False)
+        self.progress.setVisible(True)
+        self.progress.setValue(0)
+        self.status_lbl.setText("正在生成 GIF...")
+
+        self._copy_thread = ConvertThread(params)
+        self._copy_thread.progress.connect(self._on_prog)
+        self._copy_thread.finished.connect(self._on_copy_done)
+        self._copy_thread.error.connect(self._on_copy_err)
+        self._copy_thread.start()
+
+    def _on_copy_done(self, out):
+        self.progress.setValue(100)
+        self.progress.setVisible(False)
+        self.copy_btn.setEnabled(True)
+        self.convert_btn.setEnabled(True)
+        try:
+            actual = os.path.getsize(out)
+            self.actual_size_lbl.setText(format_size(actual))
+            self.status_lbl.setText(f"已复制 ✓  {format_size(actual)}")
+        except Exception:
+            self.status_lbl.setText("已复制 ✓")
+        self._last_gif = out
+        self._do_copy_to_clipboard(out)
+
+    def _on_copy_err(self, msg):
+        self.progress.setVisible(False)
+        self.status_lbl.setText(f"❌ 错误: {msg}")
+        self.copy_btn.setEnabled(True)
+        self.convert_btn.setEnabled(True)
+        QMessageBox.critical(self, "复制失败", msg)
+
+    def _do_copy_to_clipboard(self, gif_path: str):
+        """将 GIF 文件写入剪贴板"""
+        from PySide6.QtGui import QClipboard
+        from PySide6.QtCore import QMimeData, QUrl
+        try:
+            clipboard = QApplication.clipboard()
+            mime = QMimeData()
+            # 方式1：写入文件 URL（支持粘贴到文件管理器/大多数应用）
+            mime.setUrls([QUrl.fromLocalFile(gif_path)])
+            # 方式2：同时写入图片数据（支持粘贴到聊天软件等）
+            from PySide6.QtGui import QImage
+            img = QImage(gif_path)
+            if not img.isNull():
+                mime.setImageData(img)
+            clipboard.setMimeData(mime)
+            self.status_lbl.setText(
+                self.status_lbl.text().replace("正在生成 GIF...", "") +
+                "  📋 已复制到剪贴板"
+            )
+            # 弹一个短暂提示
+            QMessageBox.information(self, "复制成功",
+                "GIF 已复制到剪贴板\n\n"
+                "可直接粘贴到聊天软件、邮件、文档等应用中")
+        except Exception as ex:
+            QMessageBox.warning(self, "复制失败", f"剪贴板操作失败:\n{ex}")
 
 
 # ───────────────────────── Update Checker ────────────────────────────
