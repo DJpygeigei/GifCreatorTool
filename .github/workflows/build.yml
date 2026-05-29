@@ -44,6 +44,15 @@ jobs:
               img.save('logo.ico', format='ICO', sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])
           "@
 
+      - name: Set version from tag
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"          # e.g. v1.0.8
+          $ver = $tag.TrimStart('v')               # e.g. 1.0.8
+          (Get-Content main.py) -replace 'VERSION\s*=\s*"[^"]+"', "VERSION = `"$ver`"" |
+            Set-Content main.py -Encoding UTF8
+          Write-Host "VERSION set to $ver"
+
       - name: Build EXE
         run: pyinstaller giftool.spec --noconfirm
 
@@ -74,6 +83,13 @@ jobs:
         run: |
           cp $(which ffmpeg)  ./ffmpeg
           cp $(which ffprobe) ./ffprobe
+
+      - name: Set version from tag
+        run: |
+          TAG="${{ github.ref_name }}"
+          VER="${TAG#v}"
+          sed -i '' "s/VERSION = \"[^\"]*\"/VERSION = \"$VER\"/" main.py
+          echo "VERSION set to $VER"
 
       - name: Build macOS app
         run: |
