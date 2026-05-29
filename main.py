@@ -2899,28 +2899,6 @@ class UpdateChecker(QThread):
             return latest.strip() != current.strip()
 
 
-class DownloadThread(QThread):
-    """后台下载新版 EXE，报告进度"""
-    progress = Signal(int)   # 0-100
-    finished = Signal(str)   # 下载完成的文件路径
-    dl_error = Signal(str)
-
-    def __init__(self, url: str, dest: str):
-        super().__init__()
-        self.url = url
-        self.dest = dest
-
-    def run(self):
-        import urllib.request
-        try:
-            def _hook(count, block, total):
-                if total > 0:
-                    self.progress.emit(min(100, int(count * block * 100 / total)))
-            urllib.request.urlretrieve(self.url, self.dest, _hook)
-            self.progress.emit(100)
-            self.finished.emit(self.dest)
-        except Exception as ex:
-            self.dl_error.emit(str(ex))
 
 
 # ───────────────────────────── Main Window ────────────────────────────
@@ -3088,132 +3066,28 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "检查更新失败", f"无法连接到 GitHub:\n{msg}")
 
     def _on_update_available(self, latest_ver: str, download_url: str, notes: str):
-        """有新版本时弹提示"""
+        """有新版本时弹提示，点击跳转下载页"""
         try:
             self._check_dlg.close()
         except Exception:
             pass
 
         notes_short = notes[:300] + "..." if len(notes) > 300 else notes
-        msg = (f"发现新版本 v{latest_ver}（当前 v{VERSION}）\n\n"
-               f"{notes_short}\n\n是否立即下载更新？")
-        ret = QMessageBox.question(self, "发现新版本", msg,
-                                   QMessageBox.Yes | QMessageBox.No)
-        if ret != QMessageBox.Yes:
-            return
-
-        self._start_download(latest_ver, download_url)
-
-    def _start_download(self, ver: str, url: str):
-        """弹下载进度对话框，后台下载"""
-        from PySide6.QtWidgets import QDialog, QVBoxLayout
-        self._dl_dialog = QDialog(self)
-        self._dl_dialog.setWindowTitle(f"下载 v{ver}")
-        self._dl_dialog.setFixedSize(380, 100)
-        self._dl_dialog.setWindowFlags(
-            self._dl_dialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
-        dv = QVBoxLayout(self._dl_dialog)
-        lbl = QLabel(f"正在下载 GIFTool v{ver}...")
-        bar = QProgressBar()
-        bar.setRange(0, 100)
-        dv.addWidget(lbl)
-        dv.addWidget(bar)
-
-        # 下载到当前 EXE 同目录
-        if getattr(sys, "frozen", False):
-            base_dir = os.path.dirname(sys.executable)
-        else:
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-        dest = os.path.join(base_dir, "GIFTool_update.exe")
-
-        self._downloader = DownloadThread(url, dest)
-        self._downloader.progress.connect(bar.setValue)
-        self._downloader.finished.connect(lambda p: self._on_download_done(p, ver))
-        self._downloader.dl_error.connect(self._on_download_error)
-        self._downloader.start()
-        self._dl_dialog.exec()
-
-    def _on_download_done(self, new_exe: str, ver: str):
-        self._dl_dialog.close()
-
-        if not getattr(sys, "frozen", False):
-            QMessageBox.information(self, "下载完成",
-                                    f"新版本已下载到:\n{new_exe}\n\n"
-                                    "（开发模式下请手动替换）")
-            return
-
-        current_exe = sys.executable
-        base_dir = os.path.dirname(current_exe)
-
-        try:
-            if os.name == "nt":
-                # Windows：bat 脚本自替换
-                # 策略：ren 旧→bak，ren 新→正式名，start 新，延迟删 bak
-                # 避免 del /f /q 在文件锁未释放时失败导致 ren 也失败
-                script_path = os.path.join(base_dir, "_giftool_update.bat")
-                target_exe  = os.path.join(base_dir, "GIFTool.exe")
-                backup_exe  = os.path.join(base_dir, "GIFTool_old.exe")
-                script = (
-                    "@echo off\n"
-                    "chcp 65001 >nul\n"
-                    # 先等旧进程退出（约 4 秒）
-                    "ping -n 5 127.0.0.1 >nul\n"
-                    # 清理上次残留 backup
-                    f'if exist "{backup_exe}" del /f /q "{backup_exe}"\n'
-                    # 重试循环：等文件锁释放后再 rename
-                    "set TRIES=0\n"
-                    ":retry\n"
-                    "if %TRIES% GEQ 10 goto giveup\n"
-                    f'ren "{current_exe}" "GIFTool_old.exe" 2>nul\n'
-                    "if errorlevel 1 (\n"
-                    "  set /a TRIES+=1\n"
-                    "  ping -n 3 127.0.0.1 >nul\n"
-                    "  goto retry\n"
-                    ")\n"
-                    # rename 成功，把新文件改为正式名
-                    f'ren "{new_exe}" "GIFTool.exe"\n'
-                    f'start "" "{target_exe}"\n'
-                    "ping -n 3 127.0.0.1 >nul\n"
-                    f'del /f /q "{backup_exe}"\n'
-                    'del /f /q "%~f0"\n'
-                    "goto :eof\n"
-                    # 重试失败兜底：直接启动新文件（不替换名字）
-                    ":giveup\n"
-                    f'start "" "{new_exe}"\n'
-                    'del /f /q "%~f0"\n'
-                )
-                with open(script_path, "w", encoding="gbk", errors="replace") as f:
-                    f.write(script)
-                subprocess.Popen(
-                    ["cmd", "/c", script_path],
-                    creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW
-                )
-            else:
-                # macOS / Linux：sh 脚本自替换
-                script_path = os.path.join(base_dir, "_giftool_update.sh")
-                script = (
-                    "#!/bin/bash\n"
-                    "sleep 2\n"
-                    f'rm -f "{current_exe}"\n'
-                    f'mv "{new_exe}" "{current_exe}"\n'
-                    f'chmod +x "{current_exe}"\n'
-                    f'open "{current_exe}"\n'
-                    f'rm -f "$0"\n'
-                )
-                with open(script_path, "w") as f:
-                    f.write(script)
-                os.chmod(script_path, 0o755)
-                subprocess.Popen(["bash", script_path])
-
-            QApplication.instance().quit()
-        except Exception as ex:
-            QMessageBox.critical(self, "更新失败",
-                                 f"无法写入更新脚本:\n{ex}\n\n"
-                                 f"请手动将以下文件替换原 EXE:\n{new_exe}")
+        msg = QMessageBox(self)
+        msg.setWindowTitle("发现新版本")
+        msg.setText(f"发现新版本 v{latest_ver}（当前 v{VERSION}）")
+        msg.setInformativeText(f"{notes_short}\n\n点击「去下载」前往 GitHub Releases 下载最新版本，替换现有 EXE 即可完成更新。")
+        msg.setIcon(QMessageBox.Information)
+        dl_btn  = msg.addButton("去下载", QMessageBox.AcceptRole)
+        msg.addButton("稍后", QMessageBox.RejectRole)
+        msg.exec()
+        if msg.clickedButton() == dl_btn:
+            import webbrowser
+            releases_url = f"https://github.com/{GITHUB_REPO}/releases/latest"
+            webbrowser.open(releases_url)
 
     def _on_download_error(self, msg):
-        self._dl_dialog.close()
-        QMessageBox.critical(self, "下载失败", f"下载出错:\n{msg}")
+        pass
 
     def _apply_theme(self, theme: str):
         self._current_theme = theme
