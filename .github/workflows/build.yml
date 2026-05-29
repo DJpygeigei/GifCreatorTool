@@ -19,7 +19,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install PySide6 pyinstaller pillow
+        run: pip install PySide6 pyinstaller pillow mss
 
       - name: Download ffmpeg (Windows)
         shell: pwsh
@@ -74,7 +74,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install PySide6 pyinstaller pillow
+        run: pip install PySide6 pyinstaller pillow mss
 
       - name: Install ffmpeg (macOS)
         run: brew install ffmpeg

@@ -1836,7 +1836,6 @@ class RecordThread(QThread):
         self._proc = None
 
     def run(self):
-        from PIL import ImageGrab, Image
         from utils import FFMPEG
 
         bbox = (self.x, self.y, self.x + self.w, self.y + self.h)
@@ -1869,28 +1868,68 @@ class RecordThread(QThread):
 
             start = time.time()
             frame_count = 0
-            last_tick = start
 
-            while not self._stop_flag:
-                t0 = time.time()
-                try:
-                    img = ImageGrab.grab(bbox=bbox, all_screens=True)
-                    # 确保尺寸精确（部分系统会偏差 1px）
-                    if img.size != (self.w, self.h):
-                        img = img.resize((self.w, self.h), Image.LANCZOS)
-                    self._proc.stdin.write(img.tobytes())
-                    frame_count += 1
-                except BrokenPipeError:
-                    break
-                except Exception:
-                    break
+            # 优先用 mss（速度快，可达 30fps+），回退到 PIL.ImageGrab
+            try:
+                import mss as _mss
+                import numpy as np
+                _use_mss = True
+            except ImportError:
+                from PIL import ImageGrab, Image
+                _use_mss = False
 
-                self.tick.emit(int(time.time() - start))
+            if _use_mss:
+                with _mss.mss() as sct:
+                    monitor = {"left": self.x, "top": self.y,
+                               "width": self.w, "height": self.h}
+                    while not self._stop_flag:
+                        t0 = time.time()
+                        try:
+                            shot = sct.grab(monitor)
+                            # mss 返回 BGRA，转为 RGB
+                            frame = bytes(shot.rgb)
+                            # 如果尺寸不匹配（高DPI缩放等）则用PIL缩放
+                            if shot.width != self.w or shot.height != self.h:
+                                from PIL import Image
+                                img = Image.frombytes("RGB", (shot.width, shot.height), frame)
+                                img = img.resize((self.w, self.h), Image.LANCZOS)
+                                frame = img.tobytes()
+                            self._proc.stdin.write(frame)
+                            frame_count += 1
+                        except BrokenPipeError:
+                            break
+                        except Exception:
+                            break
 
-                elapsed_frame = time.time() - t0
-                sleep_t = interval - elapsed_frame
-                if sleep_t > 0:
-                    time.sleep(sleep_t)
+                        self.tick.emit(int(time.time() - start))
+                        elapsed_frame = time.time() - t0
+                        sleep_t = interval - elapsed_frame
+                        if sleep_t > 0:
+                            time.sleep(sleep_t)
+            else:
+                # 回退：PIL.ImageGrab
+                from PIL import ImageGrab, Image
+                while not self._stop_flag:
+                    t0 = time.time()
+                    try:
+                        img = ImageGrab.grab(bbox=(self.x, self.y,
+                                                   self.x + self.w,
+                                                   self.y + self.h),
+                                             all_screens=True)
+                        if img.size != (self.w, self.h):
+                            img = img.resize((self.w, self.h), Image.LANCZOS)
+                        self._proc.stdin.write(img.tobytes())
+                        frame_count += 1
+                    except BrokenPipeError:
+                        break
+                    except Exception:
+                        break
+
+                    self.tick.emit(int(time.time() - start))
+                    elapsed_frame = time.time() - t0
+                    sleep_t = interval - elapsed_frame
+                    if sleep_t > 0:
+                        time.sleep(sleep_t)
 
             # 记录实际录制时长
             actual_duration = time.time() - start

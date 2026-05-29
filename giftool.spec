@@ -34,6 +34,10 @@ a = Analysis(
     hiddenimports=[
         'PySide6.QtMultimedia',
         'PySide6.QtMultimediaWidgets',
+        'mss',
+        'mss.windows',
+        'mss.darwin',
+        'mss.linux',
     ],
     hookspath=[],
     hooksconfig={},
