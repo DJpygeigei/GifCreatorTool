@@ -67,3 +67,22 @@ exe = EXE(
     uac_admin=False,
     version=None,
 )
+
+# macOS：打成 .app bundle，双击不会弹 Terminal
+if sys.platform == 'darwin':
+    app = BUNDLE(
+        exe,
+        name='GIFTool.app',
+        icon=_icon,
+        bundle_identifier='com.wupengyu1.giftool',
+        info_plist={
+            'CFBundleDisplayName': 'GIFTool',
+            'CFBundleShortVersionString': '1.0.5',
+            'NSHighResolutionCapable': True,
+            # 隐藏 Dock 以外的终端窗口
+            'LSUIElement': False,
+            # 屏幕录制权限说明
+            'NSScreenCaptureDescription':
+                'GIFTool 需要屏幕录制权限以录制 GIF',
+        },
+    )
