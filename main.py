@@ -1750,8 +1750,9 @@ class RegionOverlay(QWidget):
     录制区域可视化覆盖层。
     显示在录制区域上方，带 8 个方向拖拽手柄，可实时调整录制区域大小。
     """
-    region_changed = Signal(int, int, int, int)   # x, y, w, h (屏幕坐标)
-    reselect_requested = Signal()                  # 用户点击"重新框选"
+    region_changed   = Signal(int, int, int, int)   # x, y, w, h (屏幕坐标)
+    reselect_requested = Signal()                    # 用户点击"重新框选"
+    cancel_requested = Signal()                      # 用户点击"取消区域"
 
     _HANDLE_SIZE = 10       # 手柄方块像素
     _MIN_SIZE    = 40       # 最小宽/高
@@ -1786,14 +1787,15 @@ class RegionOverlay(QWidget):
         self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.setMouseTracking(True)
 
-        self._drag_handle = None     # 正在拖拽的手柄编号
+        self._drag_handle = None     # 正在拖拽的手柄编号（-2=整体移动）
         self._drag_start_pos = None  # 拖拽起始鼠标位置（全局坐标）
         self._drag_start_rect = None # 拖拽起始区域 (rx,ry,rw,rh)
 
         # 工具按钮区域（在 overlay 内部右上角）
         self._btn_h = 26   # 按钮行高度
         self._reselect_rect = QRect()
-        self._close_rect = QRect()
+        self._cancel_rect   = QRect()
+        self._close_rect    = QRect()
 
         self._update_geometry()
         self.show()
@@ -1838,6 +1840,16 @@ class RegionOverlay(QWidget):
             if hr.contains(pos):
                 return i
         return -1
+
+    def _hit_move_area(self, pos: QPoint) -> bool:
+        """
+        是否命中整体拖动区域：
+        内部区域 + 向外扩展 BORDER_HIT 像素（含边框、手柄）均可触发移动。
+        """
+        BORDER_HIT = 8
+        r = self._inner_rect().adjusted(-BORDER_HIT, -BORDER_HIT,
+                                        BORDER_HIT,  BORDER_HIT)
+        return r.contains(pos)
 
     def _cursor_for_handle(self, idx: int) -> Qt.CursorShape:
         cursors = {
@@ -1895,22 +1907,37 @@ class RegionOverlay(QWidget):
         p.setPen(QColor(255, 255, 255))
         fm = p.fontMetrics()
         size_txt = f"录制区域  {self._rw} × {self._rh} px"
-        txt_w = fm.horizontalAdvance(size_txt)
+
+        # 按钮尺寸
+        btn_w   = 70   # "重新框选"
+        cancel_w = 60  # "取消区域"
+        close_w  = 40  # "隐藏"
+        gap = 4
 
         # "重新框选" 按钮
-        btn_w = 70
-        self._reselect_rect = QRect(bar_rect.right() - btn_w * 2 - 6,
-                                    bar_rect.top() + 3, btn_w, self._btn_h - 6)
+        self._reselect_rect = QRect(
+            bar_rect.right() - cancel_w - btn_w - close_w - gap * 3,
+            bar_rect.top() + 3, btn_w, self._btn_h - 6)
         p.setBrush(QBrush(QColor(0, 113, 227, 200)))
         p.setPen(Qt.NoPen)
         p.drawRoundedRect(self._reselect_rect, 4, 4)
         p.setPen(QColor(255, 255, 255))
         p.drawText(self._reselect_rect, Qt.AlignCenter, "重新框选")
 
+        # "取消区域" 按钮
+        self._cancel_rect = QRect(
+            bar_rect.right() - cancel_w - close_w - gap * 2,
+            bar_rect.top() + 3, cancel_w, self._btn_h - 6)
+        p.setBrush(QBrush(QColor(200, 120, 0, 200)))
+        p.setPen(Qt.NoPen)
+        p.drawRoundedRect(self._cancel_rect, 4, 4)
+        p.setPen(QColor(255, 255, 255))
+        p.drawText(self._cancel_rect, Qt.AlignCenter, "取消区域")
+
         # "隐藏" 按钮
-        close_w = 40
-        self._close_rect = QRect(bar_rect.right() - close_w - 3,
-                                  bar_rect.top() + 3, close_w, self._btn_h - 6)
+        self._close_rect = QRect(
+            bar_rect.right() - close_w - gap,
+            bar_rect.top() + 3, close_w, self._btn_h - 6)
         p.setBrush(QBrush(QColor(180, 60, 60, 200)))
         p.setPen(Qt.NoPen)
         p.drawRoundedRect(self._close_rect, 4, 4)
@@ -1919,21 +1946,30 @@ class RegionOverlay(QWidget):
 
         # 尺寸文字
         txt_rect = QRect(bar_rect.left() + 6, bar_rect.top(),
-                         bar_rect.width() - btn_w * 2 - close_w - 20, self._btn_h)
+                         bar_rect.width() - btn_w - cancel_w - close_w - gap * 4 - 6, self._btn_h)
         p.setPen(QColor(200, 200, 200))
         p.drawText(txt_rect, Qt.AlignVCenter | Qt.AlignLeft, size_txt)
 
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton:
             pos = e.pos()
-            # 检查按钮点击
+            # 检查按钮点击（优先）
             if self._reselect_rect.contains(pos):
                 self.reselect_requested.emit()
+                return
+            if self._cancel_rect.contains(pos):
+                self.cancel_requested.emit()
                 return
             if self._close_rect.contains(pos):
                 self.hide()
                 return
-            # 检查手柄拖拽
+            # 整体拖动：手柄区域 + 边框 + 内部均可触发
+            if self._hit_move_area(pos):
+                self._drag_handle = -2
+                self._drag_start_pos = e.globalPosition().toPoint()
+                self._drag_start_rect = (self._rx, self._ry, self._rw, self._rh)
+                return
+            # 边框外缘：缩放手柄（仅 overlay 边缘区域外的手柄仍保留缩放）
             idx = self._hit_handle(pos)
             if idx >= 0:
                 self._drag_handle = idx
@@ -1949,33 +1985,37 @@ class RegionOverlay(QWidget):
             ox, oy, ow, oh = self._drag_start_rect
             nx, ny, nw, nh = ox, oy, ow, oh
 
-            idx = self._drag_handle
-            if idx in (self._TL, self._ML, self._BL):   # 左边
+            if self._drag_handle == -2:
+                # 整体平移，尺寸不变
                 nx = ox + dx
-                nw = max(self._MIN_SIZE, ow - dx)
-                if nw == self._MIN_SIZE:
-                    nx = ox + ow - self._MIN_SIZE
-            if idx in (self._TR, self._MR, self._BR):   # 右边
-                nw = max(self._MIN_SIZE, ow + dx)
-            if idx in (self._TL, self._TC, self._TR):   # 上边
                 ny = oy + dy
-                nh = max(self._MIN_SIZE, oh - dy)
-                if nh == self._MIN_SIZE:
-                    ny = oy + oh - self._MIN_SIZE
-            if idx in (self._BL, self._BC, self._BR):   # 下边
-                nh = max(self._MIN_SIZE, oh + dy)
+            else:
+                idx = self._drag_handle
+                if idx in (self._TL, self._ML, self._BL):   # 左边
+                    nx = ox + dx
+                    nw = max(self._MIN_SIZE, ow - dx)
+                    if nw == self._MIN_SIZE:
+                        nx = ox + ow - self._MIN_SIZE
+                if idx in (self._TR, self._MR, self._BR):   # 右边
+                    nw = max(self._MIN_SIZE, ow + dx)
+                if idx in (self._TL, self._TC, self._TR):   # 上边
+                    ny = oy + dy
+                    nh = max(self._MIN_SIZE, oh - dy)
+                    if nh == self._MIN_SIZE:
+                        ny = oy + oh - self._MIN_SIZE
+                if idx in (self._BL, self._BC, self._BR):   # 下边
+                    nh = max(self._MIN_SIZE, oh + dy)
+                # 偶数对齐（ffmpeg 要求）
+                nw = nw & ~1;  nh = nh & ~1
 
-            # 偶数对齐（ffmpeg 要求）
-            nw = nw & ~1;  nh = nh & ~1
             self._rx = nx; self._ry = ny
             self._rw = nw; self._rh = nh
             self._update_geometry()
             self.region_changed.emit(self._rx, self._ry, self._rw, self._rh)
         else:
-            # 更新鼠标形状
-            idx = self._hit_handle(pos)
-            if idx >= 0:
-                self.setCursor(QCursor(self._cursor_for_handle(idx)))
+            # 悬停光标：整个可拖动区域均显示移动光标
+            if self._hit_move_area(pos):
+                self.setCursor(QCursor(Qt.SizeAllCursor))
             else:
                 self.setCursor(QCursor(Qt.ArrowCursor))
 
@@ -2447,6 +2487,19 @@ class RecordTab(QWidget):
         self._src_w = w
         self._src_h = h
 
+    def _cancel_region(self):
+        """取消录制区域，重置状态"""
+        self._region = None
+        self.region_lbl.setText("未选择区域")
+        self.record_btn.setEnabled(False)
+        self.rec_status_lbl.setText("请先框选录制区域")
+        if self._overlay is not None:
+            try:
+                self._overlay.close()
+            except Exception:
+                pass
+            self._overlay = None
+
     def _select_region(self):
         # 最小化主窗口避免遮挡
         win = self.window()
@@ -2486,6 +2539,7 @@ class RecordTab(QWidget):
         self._overlay = RegionOverlay(x, y, w, h)
         self._overlay.region_changed.connect(self._on_overlay_region_changed)
         self._overlay.reselect_requested.connect(self._select_region)
+        self._overlay.cancel_requested.connect(self._cancel_region)
 
     # ── 录制控制 ─────────────────────────────────────────────────
     def _toggle_record(self):
