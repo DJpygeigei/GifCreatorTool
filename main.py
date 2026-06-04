@@ -482,7 +482,7 @@ ICON_SETTINGS = "8.png"   # 设置按钮（两主题相同）
 ICON_THEME    = "15.png"  # 主题菜单图标（两主题相同）
 
 # 当前版本号（发布新版时修改此处，并在 GitHub 创建同名 tag 的 Release）
-VERSION = "1.1.3"
+VERSION = "1.3.0"
 GITHUB_REPO = "DJpygeigei/GifCreatorTool"
 
 
